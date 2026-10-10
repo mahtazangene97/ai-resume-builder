@@ -1,0 +1,1069 @@
+{
+  "name": "Resume Builder - Save and AI Suggestions",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resume-builder",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "53ee9f47-1fd9-4d82-bf39-51b63a93ef7d",
+      "name": "Resume Submitted",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        112
+      ],
+      "webhookId": "13d987ee-6359-4805-8e16-c0d89cc49d47"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pdf1",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "generate_pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c24ca8fa-e446-4dd7-9c56-23ac37ed7eec",
+      "name": "Is PDF Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -304,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || {};\nconst pi = b.personalInfo || b.personal_info || {};\nfunction esc(v) {\n  return String(v === undefined || v === null ? '' : v)\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\n}\nfunction arr(v) { return Array.isArray(v) ? v : (v ? [v] : []); }\nfunction txt(o, keys) {\n  for (const k of keys) { if (o && o[k]) { return String(o[k]); } }\n  return '';\n}\nfunction dates(o) {\n  const range = txt(o, ['dates', 'period', 'duration', 'years']);\n  if (range) { return range; }\n  const st = txt(o, ['startDate', 'start', 'from']);\n  const en = txt(o, ['endDate', 'end', 'to']) || (st ? 'Present' : '');\n  return st ? (st + ' - ' + en) : en;\n}\nfunction bullets(o) {\n  let d = o.bullets || o.achievements || o.highlights || o.description || o.details || '';\n  if (!Array.isArray(d)) { d = String(d).split(String.fromCharCode(10)); }\n  const items = d.map(function (x) { return String(x).replace(/^[-*] */, '').trim(); }).filter(Boolean);\n  if (!items.length) { return ''; }\n  return '<ul>' + items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';\n}\nfunction section(title, body) {\n  return body ? '<section><h2>' + esc(title) + '</h2>' + body + '</section>' : '';\n}\nfunction entry(head, sub, right, extra) {\n  return '<div class=\"entry\"><div class=\"row\"><div><span class=\"h\">' + esc(head) + '</span>' +\n    (sub ? '<span class=\"sub\"> | ' + esc(sub) + '</span>' : '') + '</div>' +\n    (right ? '<div class=\"date\">' + esc(right) + '</div>' : '') + '</div>' + (extra || '') + '</div>';\n}\nconst name = txt(pi, ['fullName', 'name']) || 'Your Name';\nconst title = txt(pi, ['title', 'jobTitle', 'headline']);\nconst contact = [pi.email, pi.phone, pi.location, pi.linkedin, pi.portfolio || pi.website]\n  .filter(Boolean).map(function (x) { return '<span>' + esc(x) + '</span>'; }).join('<i></i>');\n\nconst exp = arr(b.experience).map(function (e) {\n  if (typeof e === 'string') { return '<div class=\"entry\"><p>' + esc(e) + '</p></div>'; }\n  return entry(txt(e, ['title', 'role', 'position', 'jobTitle']), txt(e, ['company', 'employer', 'organization']), dates(e), bullets(e));\n}).join('');\nconst edu = arr(b.education).map(function (e) {\n  if (typeof e === 'string') { return '<div class=\"entry\"><p>' + esc(e) + '</p></div>'; }\n  const deg = [txt(e, ['degree', 'qualification']), txt(e, ['field', 'major', 'fieldOfStudy'])].filter(Boolean).join(', ');\n  const extra = txt(e, ['description', 'details', 'honors', 'gpa']);\n  return entry(deg || txt(e, ['title']), txt(e, ['school', 'institution', 'university']), dates(e) || txt(e, ['year', 'graduationYear']), extra ? '<p>' + esc(extra) + '</p>' : '');\n}).join('');\nlet skillsArr = b.skills;\nif (typeof skillsArr === 'string') { skillsArr = skillsArr.split(','); }\nconst skills = arr(skillsArr).map(function (x) {\n  return typeof x === 'string' ? x.trim() : txt(x, ['name', 'skill']);\n}).filter(Boolean).map(function (x) { return '<span class=\"chip\">' + esc(x) + '</span>'; }).join('');\nconst proj = arr(b.projects).map(function (e) {\n  if (typeof e === 'string') { return '<div class=\"entry\"><p>' + esc(e) + '</p></div>'; }\n  const tech = arr(e.technologies || e.tech || e.stack).join(', ');\n  const link = txt(e, ['link', 'url']);\n  const extra = bullets(e) + (tech ? '<p class=\"meta\">Tech: ' + esc(tech) + '</p>' : '') + (link ? '<p class=\"meta\">' + esc(link) + '</p>' : '');\n  return entry(txt(e, ['name', 'title']), '', dates(e), extra);\n}).join('');\nconst cert = arr(b.certifications).map(function (e) {\n  if (typeof e === 'string') { return '<div class=\"entry\"><p>' + esc(e) + '</p></div>'; }\n  return entry(txt(e, ['name', 'title']), txt(e, ['issuer', 'organization']), txt(e, ['date', 'year', 'issued']), '');\n}).join('');\nconst summary = b.summary ? '<p>' + esc(b.summary) + '</p>' : '';\n\nconst css = '@page{size:A4}*{box-sizing:border-box}body{margin:0;font-family:Helvetica,Arial,sans-serif;color:#1f2937;font-size:10.5pt;line-height:1.5}' +\n  '.wrap{padding:0 16mm}header{background:#0f2744;color:#fff;padding:12mm 16mm 9mm}header h1{margin:0;font-size:25pt;letter-spacing:.5px}' +\n  '.title{margin-top:2px;font-size:12pt;color:#9bc1ee}.contact{margin-top:8px;font-size:9.5pt;color:#dbe7f5}.contact i{display:inline-block;width:4px;height:4px;border-radius:2px;background:#9bc1ee;margin:0 9px;vertical-align:middle}' +\n  'section{margin-top:16px}h2{margin:0 0 8px;font-size:11pt;text-transform:uppercase;letter-spacing:1.5px;color:#0f2744;border-bottom:2px solid #2f6fb5;padding-bottom:3px}' +\n  '.entry{margin-bottom:10px;page-break-inside:avoid}.row{display:flex;justify-content:space-between;align-items:baseline}.h{font-weight:bold;color:#111827}.sub{color:#2f6fb5;font-weight:bold}.date{color:#6b7280;font-size:9.5pt;white-space:nowrap}' +\n  'ul{margin:4px 0 0;padding-left:18px}li{margin-bottom:2px}p{margin:4px 0}.meta{color:#6b7280;font-size:9.5pt}.chip{display:inline-block;background:#e8f0fa;color:#0f2744;border-radius:10px;padding:2px 10px;margin:0 6px 6px 0;font-size:9.5pt}';\n\nconst html = '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>' + css + '</style></head><body>' +\n  '<header><h1>' + esc(name) + '</h1>' + (title ? '<div class=\"title\">' + esc(title) + '</div>' : '') +\n  '<div class=\"contact\">' + contact + '</div></header><div class=\"wrap\">' +\n  section('Summary', summary) + section('Experience', exp) + section('Education', edu) +\n  section('Skills', skills) + section('Projects', proj) + section('Certifications', cert) +\n  '</div></body></html>';\n\nconst rid = b.resumeId || b.resume_id || '';\nconst safe = (name || 'resume').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'resume';\nreturn [{ json: { html: html, resume_id: rid, file_name: safe + '_Resume.pdf' } }];"
+      },
+      "id": "5b9306b9-016f-4169-a221-36c1856772ef",
+      "name": "Build Resume HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "apiKey",
+        "operation": "URL/HTML to PDF",
+        "convertType": "htmlToPDF",
+        "html": "={{ $json.html }}",
+        "advancedOptions": {
+          "name": "={{ $json.file_name }}",
+          "margins": "12mm 0mm 12mm 0mm",
+          "mediaType": "print",
+          "expiration": 60,
+          "paperSize": "a4",
+          "printBackground": true
+        }
+      },
+      "id": "817c396f-1d51-4594-9460-b3e6a9c13fea",
+      "name": "Render PDF",
+      "type": "n8n-nodes-pdfco.PDFco Api",
+      "typeVersion": 1.1,
+      "position": [
+        192,
+        416
+      ],
+      "credentials": {
+        "pdfcoApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "success",
+              "type": "boolean",
+              "value": true
+            },
+            {
+              "id": "p2",
+              "name": "resume_id",
+              "type": "string",
+              "value": "={{ $(\"Build Resume HTML\").item.json.resume_id }}"
+            },
+            {
+              "id": "p3",
+              "name": "pdf_url",
+              "type": "string",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "id": "p4",
+              "name": "file_name",
+              "type": "string",
+              "value": "={{ $(\"Build Resume HTML\").item.json.file_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5ff5ceeb-4e2a-4063-a9cd-9a7fb0af0525",
+      "name": "Build PDF Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        416,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "fcf41280-8dfc-420d-ab34-ae3f6f26917c",
+      "name": "Respond with PDF",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        640,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "resume_id",
+              "type": "string",
+              "value": "={{ $json.body.resumeId || (\"res_\" + $execution.id + \"_\" + $now.toMillis()) }}"
+            },
+            {
+              "id": "a2",
+              "name": "created_at",
+              "type": "string",
+              "value": "={{ $now.toISO() }}"
+            },
+            {
+              "id": "a3",
+              "name": "resume",
+              "type": "object",
+              "value": "={{ { personalInfo: $json.body.personalInfo || {}, summary: $json.body.summary || \"\", experience: $json.body.experience || [], education: $json.body.education || [], skills: $json.body.skills || [], projects: $json.body.projects || [], certifications: $json.body.certifications || [] } }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "9b6411f2-9348-443b-9784-f88cd2b7f0f0",
+      "name": "Normalize Resume",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1b7IpgwYmnP1fudxnw45Kaf5S0IUDp5JLiRSq8P0cpRo",
+          "mode": "list",
+          "cachedResultName": "Resume Id",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1b7IpgwYmnP1fudxnw45Kaf5S0IUDp5JLiRSq8P0cpRo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1b7IpgwYmnP1fudxnw45Kaf5S0IUDp5JLiRSq8P0cpRo/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "created_at": "={{ $json.created_at }}",
+            "full_name": "={{ $json.resume.personalInfo.fullName || \"\" }}",
+            "email": "={{ $json.resume.personalInfo.email || \"\" }}",
+            "phone": "={{ $json.resume.personalInfo.phone || \"\" }}",
+            "location": "={{ $json.resume.personalInfo.location || \"\" }}",
+            "summary": "={{ $json.resume.summary }}",
+            "experience": "={{ JSON.stringify($json.resume.experience) }}",
+            "education": "={{ JSON.stringify($json.resume.education) }}",
+            "skills": "={{ JSON.stringify($json.resume.skills) }}",
+            "projects": "={{ JSON.stringify($json.resume.projects) }}",
+            "certifications": "={{ JSON.stringify($json.resume.certifications) }}",
+            "resume_json": "={{ JSON.stringify($json.resume) }}"
+          },
+          "matchingColumns": [
+            "resume_id"
+          ],
+          "schema": [
+            {
+              "id": "resume_id",
+              "displayName": "resume_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "full_name",
+              "displayName": "full_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "linkedin",
+              "displayName": "linkedin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "portfolio",
+              "displayName": "portfolio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "experience",
+              "displayName": "experience",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "education",
+              "displayName": "education",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skills",
+              "displayName": "skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "projects",
+              "displayName": "projects",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "certifications",
+              "displayName": "certifications",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resume_json",
+              "displayName": "resume_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "headers",
+              "displayName": "headers",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "params",
+              "displayName": "params",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resume",
+              "displayName": "resume",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "dd1815ce-aa11-47bd-bbdb-becf841e49d4",
+      "name": "Save Resume to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MIzWeOcTo3AHGzCt",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Review this resume and produce improvement suggestions per section.\n\nRESUME (JSON):\n{{ JSON.stringify($(\"Normalize Resume\").item.json.resume, null, 2) }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an expert resume coach and recruiter. Evaluate the resume section by section: personal_info, summary, experience, education, skills, projects, certifications.\n\nFor EACH section return:\n1. suggestions: between 3 and 5 improvement points (as many as genuinely matter, never fewer than 3 or more than 5). Each is one concrete, actionable, professional sentence or short rewrite the user can apply directly, and each should raise the section's score if implemented.\n2. section_scores: an integer 0-100 for the section as it is NOW.\n\nSection focus: personal_info = contact completeness and professional links; summary = positioning, length, value proposition; experience = impact, metrics, achievements over duties; education = relevance, ordering, honors; skills = grouping, missing in-demand keywords, prioritization; projects = outcomes, tech stack, links; certifications = relevance, recency, credential IDs.\n\nScoring rubric: 0-20 empty or almost empty; 21-40 present but weak; 41-60 adequate, clear gaps; 61-80 good, minor improvements; 81-100 excellent. Score strictly and consistently from the actual content: the same content must get the same score, and a section improves in score only when its content really improves (for example after suggestions are applied).\n\nRules:\n- Base everything on the actual resume content. If a section is empty, score it low and give suggestions on what to add and how to write it.\n- Never invent facts about the candidate; where a metric is needed, use a placeholder like [X%]."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "4d855d22-4dc0-4414-bcbe-57ba9b8615e1",
+      "name": "Generate Section Suggestions",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "2ffae51b-b73d-4de4-84df-3294d4573452",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"suggestions\":{\"type\":\"object\",\"properties\":{\"personal_info\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":5,\"items\":{\"type\":\"string\"}},\"summary\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":5,\"items\":{\"type\":\"string\"}},\"experience\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":5,\"items\":{\"type\":\"string\"}},\"education\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":5,\"items\":{\"type\":\"string\"}},\"skills\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":5,\"items\":{\"type\":\"string\"}},\"projects\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":5,\"items\":{\"type\":\"string\"}},\"certifications\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":5,\"items\":{\"type\":\"string\"}}},\"required\":[\"personal_info\",\"summary\",\"experience\",\"education\",\"skills\",\"projects\",\"certifications\"]},\"section_scores\":{\"type\":\"object\",\"properties\":{\"personal_info\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},\"summary\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},\"experience\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},\"education\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},\"skills\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},\"projects\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},\"certifications\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100}},\"required\":[\"personal_info\",\"summary\",\"experience\",\"education\",\"skills\",\"projects\",\"certifications\"]}},\"required\":[\"suggestions\",\"section_scores\"]}"
+      },
+      "id": "5c1f4024-ebd8-4bf0-a761-5cf35986e505",
+      "name": "Suggestions Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        816,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Pick 3 job search keywords for jobinja.ir from this resume.\n\nRESUME (JSON):\n{{ JSON.stringify($(\"Normalize Resume\").first().json.resume, null, 2) }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You match resumes to job ads on the Iranian job board jobinja.ir. Read the resume, mainly the job titles in experience, then skills, summary and education, and return exactly 3 short search keywords, ordered from most to least relevant to this candidate. Each keyword is a role or core skill of 1-3 words that a job ad title would contain, e.g. frontend, React, UI/UX Designer, Data Analyst, حسابدار. Use English for tech roles (the board indexes them in English) and Persian for local non-tech roles. The three keywords must be different from each other, and no seniority words, no company names, no locations."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "7fb77915-1345-498c-bf2e-4e27500e02bd",
+      "name": "Extract Job Keywords",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1024,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "e819e419-0a04-4c1b-b520-28d693c086d7",
+      "name": "Job Keywords Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        496
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "Gateway credits",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"keywords\":{\"type\":\"array\",\"minItems\":3,\"maxItems\":3,\"items\":{\"type\":\"string\"}}},\"required\":[\"keywords\"]}"
+      },
+      "id": "4eff5989-d7c3-4bde-8844-584cc41d1fd7",
+      "name": "Job Keywords Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1168,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = ($input.first().json.output || {});\nlet list = (Array.isArray(out.keywords) ? out.keywords : []).map(function (k) { return String(k || '').trim(); }).filter(Boolean);\nif (!list.length) {\n  const r = $('Normalize Resume').first().json.resume || {};\n  const e = (r.experience || [])[0] || {};\n  const s = (r.skills || [])[0];\n  const fb = e.title || e.role || e.position || (r.personalInfo || {}).title || (typeof s === 'string' ? s : (s || {}).name) || '';\n  if (fb) { list = [String(fb)]; }\n}\nif (!list.length) { list = ['developer']; }\nreturn list.slice(0, 3).map(function (k) {\n  return { json: { keyword: k, url: 'https://jobinja.ir/jobs?filters%5Bkeywords%5D%5B0%5D=' + encodeURIComponent(k) } };\n});"
+      },
+      "id": "fbba17d0-0658-4e1d-ba60-8ceb0bdfab30",
+      "name": "Build Search Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fa,en;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "51f61bf1-79da-4385-a5d0-095dedba54f4",
+      "name": "Search Jobinja",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1600,
+        112
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function clean(s) {\n  return String(s || '').replace(/<[^>]*>/g, ' ').replace(/&zwnj;/g, String.fromCharCode(8204)).replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\").replace(/&nbsp;/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction parseList(html) {\n  const parts = html.split('c-jobListView__item ').slice(1);\n  const jobs = [];\n  for (const p of parts) {\n    const t = p.match(/c-jobListView__titleLink\"[^>]*href=\"([^\"]+)\"[^>]*>([\\s\\S]*?)<\\/a>/);\n    if (!t) { continue; }\n    const url = t[1].replace(/&amp;/g, '&').split('?')[0];\n    const comp = p.match(/c-icon--construction\"><\\/i>\\s*<span>([\\s\\S]*?)<\\/span>/);\n    const place = p.match(/c-icon--place\"><\\/i>\\s*<span>([\\s\\S]*?)<\\/span>/);\n    const contract = p.match(/c-icon--resume\"><\\/i>\\s*<span>\\s*<span>([\\s\\S]*?)<\\/span>/);\n    const days = p.match(/c-jobListView__passedDays\">([\\s\\S]*?)<\\/span>/);\n    jobs.push({\n      title: clean(t[2]),\n      company: comp ? clean(comp[1]) : '',\n      location: place ? clean(place[1]) : '',\n      contract: contract ? clean(contract[1]) : '',\n      posted: days ? clean(days[1]).replace(/[()]/g, '').trim() : '',\n      url: url\n    });\n  }\n  return jobs;\n}\nconst lists = $input.all().map(function (i) { return parseList(String(i.json.data || '')); });\nconst seen = {};\nconst picked = [];\nfor (let round = 0; round < 25 && picked.length < 3; round++) {\n  for (const l of lists) {\n    const j = l[round];\n    if (j && !seen[j.url] && picked.length < 3) { seen[j.url] = true; picked.push(j); }\n  }\n}\nreturn [{ json: { jobs: picked } }];"
+      },
+      "id": "2b41f5a5-9849-483e-baba-1ddaf064f49c",
+      "name": "Parse Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        112
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "jobs",
+        "options": {}
+      },
+      "id": "efdcf1cb-080c-4a2e-a55a-8e49b5a794f7",
+      "name": "Split Jobs",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        112
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url || \"https://jobinja.ir\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fa,en;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "1fc67b27-ea32-4acb-a817-207340618344",
+      "name": "Fetch Job Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2272,
+        112
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function clean(s) {\n  return String(s || '').replace(/<[^>]*>/g, ' ').replace(/&zwnj;/g, String.fromCharCode(8204)).replace(/&amp;/g, '&').replace(/&quot;/g, '\"').replace(/&nbsp;/g, ' ').replace(/&#?[a-z0-9]+;/gi, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction shorten(s, n) {\n  if (s.length <= n) { return s; }\n  const cut = s.slice(0, n);\n  const sp = cut.lastIndexOf(' ');\n  return (sp > n * 0.6 ? cut.slice(0, sp) : cut) + '...';\n}\nconst jobs = ($('Parse Jobs').first().json.jobs || []);\nconst det = $input.all();\nconst result = jobs.map(function (j, idx) {\n  const html = String((det[idx] && det[idx].json && det[idx].json.data) || '');\n  let desc = '';\n  const k = html.indexOf('s-jobDesc');\n  if (k >= 0) { desc = clean(html.slice(k, k + 9000).replace(/^[^>]*>/, '')); }\n  if (!desc) { desc = [j.contract, j.posted].filter(Boolean).join(' - '); }\n  return { title: j.title, company: j.company, location: j.location, description: shorten(desc, 220), url: j.url };\n});\nreturn [{ json: { job_suggestions: result } }];"
+      },
+      "id": "957bd203-85d3-424e-a38e-283dee0f6946",
+      "name": "Merge Job Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "success",
+              "type": "boolean",
+              "value": true
+            },
+            {
+              "id": "r2",
+              "name": "resume_id",
+              "type": "string",
+              "value": "={{ $(\"Normalize Resume\").item.json.resume_id }}"
+            },
+            {
+              "id": "r3",
+              "name": "resume",
+              "type": "object",
+              "value": "={{ $(\"Normalize Resume\").item.json.resume }}"
+            },
+            {
+              "id": "r4",
+              "name": "suggestions",
+              "type": "object",
+              "value": "={{ Object.fromEntries(Object.entries($(\"Generate Section Suggestions\").first().json.output.suggestions).map(([k, v]) => [k, v.slice(0, 5)])) }}"
+            },
+            {
+              "id": "r5",
+              "name": "section_scores",
+              "type": "object",
+              "value": "={{ Object.fromEntries(Object.entries($(\"Generate Section Suggestions\").first().json.output.section_scores).map(([k, v]) => [k, Math.max(0, Math.min(100, Math.round(Number(v) || 0)))])) }}"
+            },
+            {
+              "id": "r7",
+              "name": "job_suggestions",
+              "type": "array",
+              "value": "={{ $json.job_suggestions }}"
+            },
+            {
+              "id": "r6",
+              "name": "overall_score",
+              "type": "number",
+              "value": "={{ (() => { const w = { personal_info: 10, summary: 15, experience: 30, education: 10, skills: 15, projects: 10, certifications: 10 }; const sc = $(\"Generate Section Suggestions\").first().json.output.section_scores; return Math.round(Object.keys(w).reduce((t, k) => t + w[k] * Math.max(0, Math.min(100, Number(sc[k]) || 0)), 0) / 100); })() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3ab88fe1-a8d2-4ed6-bde0-0aab3485e993",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1024,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "51b93d80-235c-437b-8177-b007ce9f2d62",
+      "name": "Respond to Frontend",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        112
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Resume Submitted": {
+      "main": [
+        [
+          {
+            "node": "Is PDF Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is PDF Request": {
+      "main": [
+        [
+          {
+            "node": "Build Resume HTML",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize Resume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Resume HTML": {
+      "main": [
+        [
+          {
+            "node": "Render PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render PDF": {
+      "main": [
+        [
+          {
+            "node": "Build PDF Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PDF Response": {
+      "main": [
+        [
+          {
+            "node": "Respond with PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Resume": {
+      "main": [
+        [
+          {
+            "node": "Save Resume to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Resume to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Generate Section Suggestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Section Suggestions": {
+      "main": [
+        [
+          {
+            "node": "Extract Job Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Section Suggestions",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suggestions Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Section Suggestions",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Job Keywords": {
+      "main": [
+        [
+          {
+            "node": "Build Search Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Keywords Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Job Keywords",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Keywords Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Extract Job Keywords",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Requests": {
+      "main": [
+        [
+          {
+            "node": "Search Jobinja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Jobinja": {
+      "main": [
+        [
+          {
+            "node": "Parse Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Jobs": {
+      "main": [
+        [
+          {
+            "node": "Split Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Jobs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Job Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Job Details": {
+      "main": [
+        [
+          {
+            "node": "Merge Job Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Job Details": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Frontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "95491007-4772-49e0-9922-ef3e647f647b",
+  "meta": {
+    "instanceId": "5b45417d6c4474f3b91df29802d285312d412060c6b8e5d260c7df1d90c4a826"
+  },
+  "nodeGroups": [
+    {
+      "id": "5e6f9e5d-295a-4573-97b4-c72fdca8056f",
+      "name": "Find matching jobs",
+      "nodeIds": [
+        "7fb77915-1345-498c-bf2e-4e27500e02bd",
+        "e819e419-0a04-4c1b-b520-28d693c086d7",
+        "4eff5989-d7c3-4bde-8844-584cc41d1fd7",
+        "fbba17d0-0658-4e1d-ba60-8ceb0bdfab30",
+        "51f61bf1-79da-4385-a5d0-095dedba54f4",
+        "2b41f5a5-9849-483e-baba-1ddaf064f49c",
+        "efdcf1cb-080c-4a2e-a55a-8e49b5a794f7",
+        "1fc67b27-ea32-4acb-a817-207340618344",
+        "957bd203-85d3-424e-a38e-283dee0f6946"
+      ],
+      "description": "Picks 3 search keywords from the resume, searches jobinja.ir and returns the 3 best open positions with links"
+    },
+    {
+      "id": "438ee85d-60aa-49ee-8a9a-3ff9effe4fcf",
+      "name": "Save and score resume",
+      "nodeIds": [
+        "9b6411f2-9348-443b-9784-f88cd2b7f0f0",
+        "dd1815ce-aa11-47bd-bbdb-becf841e49d4",
+        "4d855d22-4dc0-4414-bcbe-57ba9b8615e1",
+        "2ffae51b-b73d-4de4-84df-3294d4573452",
+        "5c1f4024-ebd8-4bf0-a761-5cf35986e505"
+      ],
+      "description": "Saves the submitted resume to the sheet, then creates AI suggestions and a score for every section"
+    },
+    {
+      "id": "991d34a3-7dd0-4c54-8abc-de7618c0f262",
+      "name": "Reply to frontend",
+      "nodeIds": [
+        "3ab88fe1-a8d2-4ed6-bde0-0aab3485e993",
+        "51b93d80-235c-437b-8177-b007ce9f2d62"
+      ],
+      "description": "Combines resume, suggestions, scores, overall score and job matches into the final JSON answer"
+    },
+    {
+      "id": "17fe8f0b-b587-4883-a200-8418d8bbba9f",
+      "name": "Create resume PDF",
+      "nodeIds": [
+        "5b9306b9-016f-4169-a221-36c1856772ef",
+        "817c396f-1d51-4594-9460-b3e6a9c13fea",
+        "5ff5ceeb-4e2a-4063-a9cd-9a7fb0af0525",
+        "fcf41280-8dfc-420d-ab34-ae3f6f26917c"
+      ],
+      "description": "Triggered by action generate_pdf: lays out all sections as a styled A4 page and returns a download link"
+    }
+  ],
+  "id": "xkFdP8kJT1raYl7P",
+  "tags": []
+}
